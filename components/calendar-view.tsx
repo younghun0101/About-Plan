@@ -157,6 +157,7 @@ export function CalendarView({
               'text-xs px-1 py-0.5 mb-0.5 rounded truncate',
               goal.bln_is_completed ? 'bg-muted line-through text-muted-foreground' : 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100'
             )}
+            title={goal.str_description || undefined}
           >
             {goal.str_title}
           </div>
@@ -212,11 +213,14 @@ export function CalendarView({
       <div className="border rounded-lg overflow-hidden">
         {/* Goals banner */}
         {dayGoals.length > 0 && (
-          <div className="p-2 bg-amber-50 dark:bg-amber-900/20 border-b">
-            <div className="text-sm font-medium mb-1">목표 데드라인</div>
+          <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border-b">
+            <div className="text-sm font-medium mb-2">목표 데드라인</div>
             {dayGoals.map((goal) => (
-              <div key={goal.tbl_goal_id} className="text-sm">
-                {goal.str_title}
+              <div key={goal.tbl_goal_id} className="mb-2 last:mb-0">
+                <div className="text-sm font-medium">{goal.str_title}</div>
+                {goal.str_description && (
+                  <div className="text-xs text-muted-foreground mt-0.5">{goal.str_description}</div>
+                )}
               </div>
             ))}
           </div>

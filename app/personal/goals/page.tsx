@@ -9,10 +9,12 @@ import { useAuth } from '@/contexts/auth-context'
 import { useData } from '@/contexts/data-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Empty } from '@/components/ui/empty'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
   DialogContent,
@@ -31,7 +33,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Target, Plus, Pencil, Trash2 } from 'lucide-react'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
+import { Target, Plus, Pencil, Trash2, ChevronDown, Calendar } from 'lucide-react'
 import type { Goal, GoalFormData } from '@/lib/types'
 
 export default function PersonalGoalsPage() {
@@ -41,8 +48,10 @@ export default function PersonalGoalsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null)
   const [goalToDelete, setGoalToDelete] = useState<Goal | null>(null)
+  const [expandedGoals, setExpandedGoals] = useState<Set<string>>(new Set())
   const [formData, setFormData] = useState<GoalFormData>({
     str_title: '',
+    str_description: '',
     dte_deadline: '',
     ref_shared_calendar_id: null,
   })
@@ -51,11 +60,22 @@ export default function PersonalGoalsPage() {
   const pendingGoals = personalGoals.filter(g => !g.bln_is_completed)
   const completedGoals = personalGoals.filter(g => g.bln_is_completed)
 
+  const toggleExpanded = (goalId: string) => {
+    const newExpanded = new Set(expandedGoals)
+    if (newExpanded.has(goalId)) {
+      newExpanded.delete(goalId)
+    } else {
+      newExpanded.add(goalId)
+    }
+    setExpandedGoals(newExpanded)
+  }
+
   const handleOpenForm = (goal?: Goal) => {
     if (goal) {
       setSelectedGoal(goal)
       setFormData({
         str_title: goal.str_title,
+        str_description: goal.str_description || '',
         dte_deadline: format(new Date(goal.dte_deadline), 'yyyy-MM-dd'),
         ref_shared_calendar_id: null,
       })
@@ -63,6 +83,7 @@ export default function PersonalGoalsPage() {
       setSelectedGoal(null)
       setFormData({
         str_title: '',
+        str_description: '',
         dte_deadline: '',
         ref_shared_calendar_id: null,
       })
@@ -107,37 +128,93 @@ export default function PersonalGoalsPage() {
     }
   }
 
-  const renderGoalItem = (goal: Goal) => (
-    <div key={goal.tbl_goal_id} className="flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-      <Checkbox
-        checked={goal.bln_is_completed}
-        onCheckedChange={() => handleToggleComplete(goal)}
-      />
-      <div className="flex-1 min-w-0">
-        <p className={`font-medium ${goal.bln_is_completed ? 'line-through text-muted-foreground' : ''}`}>
-          {goal.str_title}
-        </p>
-        <p className="text-sm text-muted-foreground">
-          데드라인: {format(new Date(goal.dte_deadline), 'yyyy년 M월 d일', { locale: ko })}
-        </p>
-      </div>
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" onClick={() => handleOpenForm(goal)}>
-          <Pencil className="h-4 w-4" />
-        </Button>
-        <Button variant="ghost" size="icon" onClick={() => setGoalToDelete(goal)}>
-          <Trash2 className="h-4 w-4 text-destructive" />
-        </Button>
-      </div>
-    </div>
-  )
+  const getDaysRemaining = (deadline: Date) => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const deadlineDate = new Date(deadline)
+    deadlineDate.setHours(0, 0, 0, 0)
+    const diff = Math.ceil((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    return diff
+  }
+
+  const renderGoalItem = (goal: Goal) => {
+    const daysRemaining = getDaysRemaining(goal.dte_deadline)
+    const isOverdue = daysRemaining < 0 && !goal.bln_is_completed
+    const isUrgent = daysRemaining <= 3 && daysRemaining >= 0 && !goal.bln_is_completed
+    const hasDescription = goal.str_description && goal.str_description.trim().length > 0
+
+    return (
+      <Collapsible 
+        key={goal.tbl_goal_id}
+        open={expandedGoals.has(goal.tbl_goal_id)}
+        onOpenChange={() => hasDescription && toggleExpanded(goal.tbl_goal_id)}
+      >
+        <div className={`border rounded-lg transition-colors ${
+          isOverdue ? 'border-destructive/50 bg-destructive/5' : 
+          isUrgent ? 'border-amber-500/50 bg-amber-50 dark:bg-amber-950/20' : 
+          'hover:bg-muted/50'
+        }`}>
+          <div className="flex items-center gap-4 p-4">
+            <Checkbox
+              checked={goal.bln_is_completed}
+              onCheckedChange={() => handleToggleComplete(goal)}
+              className="shrink-0"
+            />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className={`font-medium ${goal.bln_is_completed ? 'line-through text-muted-foreground' : ''}`}>
+                  {goal.str_title}
+                </p>
+                {isOverdue && (
+                  <Badge variant="destructive" className="text-xs">지연됨</Badge>
+                )}
+                {isUrgent && (
+                  <Badge className="bg-amber-500 hover:bg-amber-600 text-xs">
+                    {daysRemaining === 0 ? '오늘 마감' : `D-${daysRemaining}`}
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                <Calendar className="h-3.5 w-3.5" />
+                <span>{format(new Date(goal.dte_deadline), 'yyyy년 M월 d일', { locale: ko })}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              {hasDescription && (
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <ChevronDown className={`h-4 w-4 transition-transform ${expandedGoals.has(goal.tbl_goal_id) ? 'rotate-180' : ''}`} />
+                  </Button>
+                </CollapsibleTrigger>
+              )}
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenForm(goal)}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setGoalToDelete(goal)}>
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            </div>
+          </div>
+          {hasDescription && (
+            <CollapsibleContent>
+              <div className="px-4 pb-4 pt-0">
+                <div className="ml-10 p-3 bg-muted/50 rounded-md">
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{goal.str_description}</p>
+                </div>
+              </div>
+            </CollapsibleContent>
+          )}
+        </div>
+      </Collapsible>
+    )
+  }
 
   return (
     <AppShell title="개인 목표">
       <div className="max-w-3xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold">개인 목표</h2>
+            <h2 className="text-2xl font-bold text-foreground">개인 목표</h2>
             <p className="text-muted-foreground">목표를 설정하면 캘린더에 자동으로 표시됩니다.</p>
           </div>
           <Button onClick={() => handleOpenForm()}>
@@ -157,33 +234,39 @@ export default function PersonalGoalsPage() {
             }}
           />
         ) : (
-          <>
+          <div className="space-y-6">
             {pendingGoals.length > 0 && (
               <Card>
-                <CardHeader>
-                  <CardTitle>진행 중 ({pendingGoals.length})</CardTitle>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-primary" />
+                    진행 중 ({pendingGoals.length})
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2">
+                <CardContent className="space-y-3">
                   {pendingGoals.map(renderGoalItem)}
                 </CardContent>
               </Card>
             )}
 
             {completedGoals.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>완료됨 ({completedGoals.length})</CardTitle>
+              <Card className="opacity-75">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-muted-foreground" />
+                    완료됨 ({completedGoals.length})
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2">
+                <CardContent className="space-y-3">
                   {completedGoals.map(renderGoalItem)}
                 </CardContent>
               </Card>
             )}
-          </>
+          </div>
         )}
 
         <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[480px]">
             <DialogHeader>
               <DialogTitle>{selectedGoal ? '목표 수정' : '새 목표'}</DialogTitle>
               <DialogDescription>
@@ -198,7 +281,18 @@ export default function PersonalGoalsPage() {
                     id="title"
                     value={formData.str_title}
                     onChange={(e) => setFormData({ ...formData, str_title: e.target.value })}
-                    placeholder="목표를 입력하세요"
+                    placeholder="달성하고 싶은 목표를 입력하세요"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="description">세부사항 (선택)</FieldLabel>
+                  <Textarea
+                    id="description"
+                    value={formData.str_description}
+                    onChange={(e) => setFormData({ ...formData, str_description: e.target.value })}
+                    placeholder="목표에 대한 세부사항이나 메모를 입력하세요..."
+                    rows={4}
+                    className="resize-none"
                   />
                 </Field>
                 <Field>

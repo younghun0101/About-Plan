@@ -175,6 +175,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const newGoal: Goal = {
       tbl_goal_id: generateId(),
       str_title: formData.str_title,
+      str_description: formData.str_description || '',
       dte_deadline: new Date(formData.dte_deadline),
       bln_is_completed: false,
       ref_user_id: formData.ref_shared_calendar_id ? null : user?.id || null,
@@ -194,6 +195,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     
     const goal = data.goals[idx]
     if (formData.str_title !== undefined) goal.str_title = formData.str_title
+    if (formData.str_description !== undefined) goal.str_description = formData.str_description
     if (formData.dte_deadline !== undefined) goal.dte_deadline = new Date(formData.dte_deadline)
     if (formData.bln_is_completed !== undefined) goal.bln_is_completed = formData.bln_is_completed
     
@@ -274,6 +276,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const newNote: MeetingNote = {
       tbl_meeting_note_id: generateId(),
       str_title: formData.str_title,
+      str_type: formData.str_type || 'general',
       str_content: formData.str_content,
       ref_created_by: user?.id || '',
       dte_created_at: now,
@@ -292,6 +295,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     
     const note = data.meetingNotes[idx]
     if (formData.str_title !== undefined) note.str_title = formData.str_title
+    if (formData.str_type !== undefined) note.str_type = formData.str_type
     if (formData.str_content !== undefined) note.str_content = formData.str_content
     note.dte_updated_at = new Date()
     

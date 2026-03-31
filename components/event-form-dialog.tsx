@@ -225,7 +225,7 @@ export function EventFormDialog({
               </Alert>
             )}
             
-            <Field className="flex-row items-center gap-3">
+            <div className="flex items-center gap-3 py-2">
               <Checkbox
                 id="allow-overlap"
                 checked={formData.bln_allow_overlap}
@@ -234,10 +234,13 @@ export function EventFormDialog({
                 }
                 disabled={isLoading}
               />
-              <FieldLabel htmlFor="allow-overlap" className="!mt-0 cursor-pointer">
+              <label 
+                htmlFor="allow-overlap" 
+                className="text-sm font-medium leading-none cursor-pointer peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
                 동시 진행 허용
-              </FieldLabel>
-            </Field>
+              </label>
+            </div>
           </FieldGroup>
           
           <DialogFooter>

@@ -34,6 +34,7 @@ export interface Event {
 export interface Goal {
   tbl_goal_id: string
   str_title: string
+  str_description: string
   dte_deadline: Date
   bln_is_completed: boolean
   ref_user_id: string | null
@@ -49,9 +50,19 @@ export interface Category {
   ref_user_id: string
 }
 
+export type MeetingType = 
+  | 'requirements'      // 앱 요구사항 미팅
+  | 'technical'         // Technische Meeting
+  | 'testing'           // 테스팅 미팅
+  | 'design'            // 디자인 미팅
+  | 'deployment'        // 배포 미팅
+  | 'post_deployment'   // 배포 후 테스팅 미팅
+  | 'general'           // 일반 미팅
+
 export interface MeetingNote {
   tbl_meeting_note_id: string
   str_title: string
+  str_type: MeetingType
   str_content: string
   ref_created_by: string
   dte_created_at: Date
@@ -99,12 +110,14 @@ export interface EventFormData {
 
 export interface GoalFormData {
   str_title: string
+  str_description: string
   dte_deadline: string
   ref_shared_calendar_id: string | null
 }
 
 export interface MeetingNoteFormData {
   str_title: string
+  str_type: MeetingType
   str_content: string
 }
 

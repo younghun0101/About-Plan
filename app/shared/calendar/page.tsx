@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Empty } from '@/components/ui/empty'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
   DialogContent,
@@ -36,7 +37,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import type { Event, SharedCalendar } from '@/lib/types'
-import { Users, Plus, MoreVertical, Pencil, Trash2 } from 'lucide-react'
+import { Users, Plus, MoreVertical, Pencil, Trash2, Calendar, CalendarDays } from 'lucide-react'
 
 export default function SharedCalendarPage() {
   const { user, getOtherUser } = useAuth()
@@ -156,56 +157,66 @@ export default function SharedCalendarPage() {
     <AppShell title="공동 캘린더">
       <div className="flex flex-col gap-6">
         {/* Calendar selection */}
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-2 flex-wrap">
-            {sharedCalendars.map((calendar) => (
-              <Card
-                key={calendar.tbl_shared_calendar_id}
-                className={`cursor-pointer transition-colors ${
-                  selectedCalendar?.tbl_shared_calendar_id === calendar.tbl_shared_calendar_id
-                    ? 'border-primary bg-primary/5'
-                    : 'hover:bg-muted'
-                }`}
-                onClick={() => setSelectedCalendar(calendar)}
-              >
-                <CardHeader className="p-3 pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm">{calendar.str_name}</CardTitle>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="icon" className="h-6 w-6">
-                          <MoreVertical className="h-3 w-3" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={(e) => {
-                          e.stopPropagation()
-                          handleEditCalendar(calendar)
-                        }}>
-                          <Pencil className="mr-2 h-4 w-4" />
-                          이름 변경
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          className="text-destructive"
-                          onClick={(e) => {
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0">
+            {sharedCalendars.map((calendar) => {
+              const eventCount = events.filter(e => e.ref_shared_calendar_id === calendar.tbl_shared_calendar_id).length
+              const isSelected = selectedCalendar?.tbl_shared_calendar_id === calendar.tbl_shared_calendar_id
+              
+              return (
+                <Card
+                  key={calendar.tbl_shared_calendar_id}
+                  className={`cursor-pointer transition-all shrink-0 ${
+                    isSelected
+                      ? 'border-primary ring-2 ring-primary/20 bg-primary/5'
+                      : 'hover:bg-muted/50 hover:border-muted-foreground/30'
+                  }`}
+                  onClick={() => setSelectedCalendar(calendar)}
+                >
+                  <CardContent className="p-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-md ${isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+                        <CalendarDays className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate max-w-[120px]">{calendar.str_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {eventCount}개 일정
+                        </p>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={(e) => {
                             e.stopPropagation()
-                            setCalendarToDelete(calendar)
-                          }}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          삭제
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                  <CardDescription className="text-xs">
-                    일정 {events.filter(e => e.ref_shared_calendar_id === calendar.tbl_shared_calendar_id).length}개
-                  </CardDescription>
-                </CardHeader>
-              </Card>
-            ))}
+                            handleEditCalendar(calendar)
+                          }}>
+                            <Pencil className="mr-2 h-4 w-4" />
+                            이름 변경
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            className="text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setCalendarToDelete(calendar)
+                            }}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            삭제
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
           </div>
-          <Button variant="outline" onClick={handleCreateCalendar}>
+          <Button variant="outline" onClick={handleCreateCalendar} className="shrink-0">
             <Plus className="h-4 w-4 mr-2" />
             새 캘린더
           </Button>
@@ -244,7 +255,7 @@ export default function SharedCalendarPage() {
 
       {/* Calendar form dialog */}
       <Dialog open={isCalendarFormOpen} onOpenChange={setIsCalendarFormOpen}>
-        <DialogContent className="sm:max-w-[350px]">
+        <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle>{editingCalendar ? '캘린더 이름 변경' : '새 공동 캘린더'}</DialogTitle>
             <DialogDescription>

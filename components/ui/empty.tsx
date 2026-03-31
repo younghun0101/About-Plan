@@ -1,17 +1,44 @@
 import { cva, type VariantProps } from 'class-variance-authority'
-
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-function Empty({ className, ...props }: React.ComponentProps<'div'>) {
+interface EmptyProps extends Omit<React.ComponentProps<'div'>, 'action'> {
+  icon?: React.ReactNode
+  title?: string
+  description?: string
+  action?: {
+    label: string
+    onClick: () => void
+  }
+}
+
+function Empty({ className, icon, title, description, action, ...props }: EmptyProps) {
   return (
     <div
       data-slot="empty"
       className={cn(
-        'flex min-w-0 flex-1 flex-col items-center justify-center gap-6 rounded-lg border-dashed p-6 text-center text-balance md:p-12',
+        'flex min-w-0 flex-1 flex-col items-center justify-center gap-4 rounded-lg border border-dashed p-6 text-center text-balance md:p-12',
         className,
       )}
       {...props}
-    />
+    >
+      {icon && (
+        <div className="flex shrink-0 items-center justify-center text-muted-foreground">
+          {icon}
+        </div>
+      )}
+      {title && (
+        <div className="text-lg font-medium tracking-tight">{title}</div>
+      )}
+      {description && (
+        <p className="text-sm text-muted-foreground max-w-sm">{description}</p>
+      )}
+      {action && (
+        <Button onClick={action.onClick} className="mt-2">
+          {action.label}
+        </Button>
+      )}
+    </div>
   )
 }
 
