@@ -10,6 +10,8 @@ This repository is linked to a [v0](https://v0.app) project. You can continue de
 
 ## Getting Started
 
+Prerequisite: Node.js `>=20.9.0` (this project is currently pinned to `20.20.2` via `.nvmrc`).
+
 First, run the development server:
 
 ```bash
