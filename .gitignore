@@ -9,6 +9,7 @@ next.user-config.*
 
 # Environment variables
 .env*.local
+deploy/.env.production
 
 # Common ignores
 node_modules
@@ -16,3 +17,6 @@ node_modules
 .DS_Store
 .tools/
 .npm-cache/
+backend/.gradle/
+backend/build/
+backend/.data/

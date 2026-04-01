@@ -7,7 +7,6 @@ import { CalendarView } from '@/components/calendar-view'
 import { EventFormDialog } from '@/components/event-form-dialog'
 import { useAuth } from '@/contexts/auth-context'
 import { useData } from '@/contexts/data-context'
-import { Empty } from '@/components/ui/empty'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,7 +18,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import type { Event } from '@/lib/types'
-import { Calendar } from 'lucide-react'
 
 export default function PersonalCalendarPage() {
   const { user, getOtherUser } = useAuth()
@@ -27,6 +25,7 @@ export default function PersonalCalendarPage() {
   
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | undefined>()
+  const [selectedEndDate, setSelectedEndDate] = useState<Date | undefined>()
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
   const [eventToDelete, setEventToDelete] = useState<Event | null>(null)
 
@@ -52,6 +51,14 @@ export default function PersonalCalendarPage() {
   const handleDateClick = (date: Date) => {
     setSelectedEvent(null)
     setSelectedDate(date)
+    setSelectedEndDate(undefined)
+    setIsFormOpen(true)
+  }
+
+  const handleTimeRangeSelect = (start: Date, end: Date) => {
+    setSelectedEvent(null)
+    setSelectedDate(start)
+    setSelectedEndDate(end)
     setIsFormOpen(true)
   }
 
@@ -60,15 +67,20 @@ export default function PersonalCalendarPage() {
     if (event.ref_user_id === user?.id) {
       setSelectedEvent(event)
       setSelectedDate(undefined)
+      setSelectedEndDate(undefined)
       setIsFormOpen(true)
     }
   }
 
-  const handleDeleteEvent = () => {
+  const handleDeleteEvent = async () => {
     if (eventToDelete) {
-      deleteEvent(eventToDelete.tbl_event_id)
-      toast.success('일정이 삭제되었습니다.')
-      setEventToDelete(null)
+      try {
+        await deleteEvent(eventToDelete.tbl_event_id)
+        toast.success('일정이 삭제되었습니다.')
+        setEventToDelete(null)
+      } catch {
+        toast.error('일정 삭제 중 오류가 발생했습니다.')
+      }
     }
   }
 
@@ -77,30 +89,18 @@ export default function PersonalCalendarPage() {
     if (!open) {
       setSelectedEvent(null)
       setSelectedDate(undefined)
+      setSelectedEndDate(undefined)
     }
   }
 
   return (
     <AppShell title="개인 캘린더">
-      {personalEvents.length === 0 && personalGoals.length === 0 ? (
-        <div className="h-full flex items-center justify-center">
-          <Empty
-            icon={<Calendar className="h-12 w-12 text-muted-foreground" />}
-            title="아직 일정이 없어요"
-            description="첫 일정을 만들어보세요!"
-            action={{
-              label: '일정 추가',
-              onClick: () => handleDateClick(new Date()),
-            }}
-          />
-        </div>
-      ) : null}
-      
       <CalendarView
         events={allVisibleEvents}
         goals={personalGoals}
         categories={userCategories}
         onDateClick={handleDateClick}
+        onTimeRangeSelect={handleTimeRangeSelect}
         onEventClick={handleEventClick}
         showOtherUserEvents={true}
         otherUserEvents={otherUserEvents}
@@ -111,7 +111,12 @@ export default function PersonalCalendarPage() {
         onOpenChange={handleFormClose}
         event={selectedEvent}
         defaultDate={selectedDate}
+        defaultEndDate={selectedEndDate}
         isShared={false}
+        onDelete={(event) => {
+          setIsFormOpen(false)
+          setEventToDelete(event)
+        }}
       />
       
       <AlertDialog open={!!eventToDelete} onOpenChange={() => setEventToDelete(null)}>

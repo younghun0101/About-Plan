@@ -48,6 +48,7 @@ export default function SharedCalendarPage() {
   )
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | undefined>()
+  const [selectedEndDate, setSelectedEndDate] = useState<Date | undefined>()
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
   const [eventToDelete, setEventToDelete] = useState<Event | null>(null)
   
@@ -84,6 +85,14 @@ export default function SharedCalendarPage() {
   const handleDateClick = (date: Date) => {
     setSelectedEvent(null)
     setSelectedDate(date)
+    setSelectedEndDate(undefined)
+    setIsFormOpen(true)
+  }
+
+  const handleTimeRangeSelect = (start: Date, end: Date) => {
+    setSelectedEvent(null)
+    setSelectedDate(start)
+    setSelectedEndDate(end)
     setIsFormOpen(true)
   }
 
@@ -92,15 +101,20 @@ export default function SharedCalendarPage() {
     if (event.ref_shared_calendar_id) {
       setSelectedEvent(event)
       setSelectedDate(undefined)
+      setSelectedEndDate(undefined)
       setIsFormOpen(true)
     }
   }
 
-  const handleDeleteEvent = () => {
+  const handleDeleteEvent = async () => {
     if (eventToDelete) {
-      deleteEvent(eventToDelete.tbl_event_id)
-      toast.success('일정이 삭제되었습니다.')
-      setEventToDelete(null)
+      try {
+        await deleteEvent(eventToDelete.tbl_event_id)
+        toast.success('일정이 삭제되었습니다.')
+        setEventToDelete(null)
+      } catch {
+        toast.error('일정 삭제 중 오류가 발생했습니다.')
+      }
     }
   }
 
@@ -109,6 +123,7 @@ export default function SharedCalendarPage() {
     if (!open) {
       setSelectedEvent(null)
       setSelectedDate(undefined)
+      setSelectedEndDate(undefined)
     }
   }
 
@@ -124,32 +139,41 @@ export default function SharedCalendarPage() {
     setIsCalendarFormOpen(true)
   }
 
-  const handleSaveCalendar = () => {
+  const handleSaveCalendar = async () => {
     if (!calendarName.trim()) {
       toast.error('캘린더 이름을 입력해주세요.')
       return
     }
 
-    if (editingCalendar) {
-      updateSharedCalendar(editingCalendar.tbl_shared_calendar_id, calendarName)
-      toast.success('캘린더 이름이 변경되었습니다.')
-    } else {
-      const newCalendar = createSharedCalendar(calendarName)
-      setSelectedCalendar(newCalendar)
-      toast.success('공동 캘린더가 생성되었습니다.')
+    try {
+      if (editingCalendar) {
+        await updateSharedCalendar(editingCalendar.tbl_shared_calendar_id, calendarName)
+        toast.success('캘린더 이름이 변경되었습니다.')
+      } else {
+        const newCalendar = await createSharedCalendar(calendarName)
+        setSelectedCalendar(newCalendar)
+        toast.success('공동 캘린더가 생성되었습니다.')
+      }
+      setIsCalendarFormOpen(false)
+    } catch {
+      toast.error('캘린더 저장 중 오류가 발생했습니다.')
     }
-    
-    setIsCalendarFormOpen(false)
   }
 
-  const handleDeleteCalendar = () => {
+  const handleDeleteCalendar = async () => {
     if (calendarToDelete) {
-      deleteSharedCalendar(calendarToDelete.tbl_shared_calendar_id)
-      if (selectedCalendar?.tbl_shared_calendar_id === calendarToDelete.tbl_shared_calendar_id) {
-        setSelectedCalendar(sharedCalendars.find(c => c.tbl_shared_calendar_id !== calendarToDelete.tbl_shared_calendar_id) || null)
+      try {
+        await deleteSharedCalendar(calendarToDelete.tbl_shared_calendar_id)
+        if (selectedCalendar?.tbl_shared_calendar_id === calendarToDelete.tbl_shared_calendar_id) {
+          setSelectedCalendar(
+            sharedCalendars.find((c) => c.tbl_shared_calendar_id !== calendarToDelete.tbl_shared_calendar_id) || null,
+          )
+        }
+        toast.success('공동 캘린더가 삭제되었습니다.')
+        setCalendarToDelete(null)
+      } catch {
+        toast.error('캘린더 삭제 중 오류가 발생했습니다.')
       }
-      toast.success('공동 캘린더가 삭제되었습니다.')
-      setCalendarToDelete(null)
     }
   }
 
@@ -237,6 +261,7 @@ export default function SharedCalendarPage() {
             events={sharedEvents}
             goals={sharedGoals}
             onDateClick={handleDateClick}
+            onTimeRangeSelect={handleTimeRangeSelect}
             onEventClick={handleEventClick}
             showOtherUserEvents={true}
             otherUserEvents={allPersonalEvents}
@@ -249,8 +274,13 @@ export default function SharedCalendarPage() {
         onOpenChange={handleFormClose}
         event={selectedEvent}
         defaultDate={selectedDate}
+        defaultEndDate={selectedEndDate}
         isShared={true}
         sharedCalendarId={selectedCalendar?.tbl_shared_calendar_id}
+        onDelete={(event) => {
+          setIsFormOpen(false)
+          setEventToDelete(event)
+        }}
       />
 
       {/* Calendar form dialog */}

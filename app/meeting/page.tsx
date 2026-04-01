@@ -313,7 +313,7 @@ export default function MeetingPage() {
     setIsFormOpen(true)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     if (!formData.str_title.trim()) {
@@ -321,22 +321,29 @@ export default function MeetingPage() {
       return
     }
 
-    if (selectedNote) {
-      updateMeetingNote(selectedNote.tbl_meeting_note_id, formData)
-      toast.success('미팅 노트가 수정되었습니다.')
-    } else {
-      createMeetingNote(formData)
-      toast.success('미팅 노트가 생성되었습니다.')
+    try {
+      if (selectedNote) {
+        await updateMeetingNote(selectedNote.tbl_meeting_note_id, formData)
+        toast.success('미팅 노트가 수정되었습니다.')
+      } else {
+        await createMeetingNote(formData)
+        toast.success('미팅 노트가 생성되었습니다.')
+      }
+      setIsFormOpen(false)
+    } catch {
+      toast.error('미팅 노트 저장 중 오류가 발생했습니다.')
     }
-    
-    setIsFormOpen(false)
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (noteToDelete) {
-      deleteMeetingNote(noteToDelete.tbl_meeting_note_id)
-      toast.success('미팅 노트가 삭제되었습니다.')
-      setNoteToDelete(null)
+      try {
+        await deleteMeetingNote(noteToDelete.tbl_meeting_note_id)
+        toast.success('미팅 노트가 삭제되었습니다.')
+        setNoteToDelete(null)
+      } catch {
+        toast.error('미팅 노트 삭제 중 오류가 발생했습니다.')
+      }
     }
   }
 
@@ -353,7 +360,7 @@ export default function MeetingPage() {
     setIsEventFormOpen(true)
   }
 
-  const handleCreateEvent = (e: React.FormEvent) => {
+  const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault()
     
     if (!eventFormData.str_title.trim()) {
@@ -366,21 +373,25 @@ export default function MeetingPage() {
       return
     }
 
-    const newEvent = createEvent({
-      str_title: eventFormData.str_title,
-      dte_start_at: eventFormData.dte_start_at,
-      dte_end_at: eventFormData.dte_end_at,
-      ref_category_id: null,
-      bln_allow_overlap: false,
-      ref_shared_calendar_id: eventFormData.ref_shared_calendar_id || null,
-    })
+    try {
+      const newEvent = await createEvent({
+        str_title: eventFormData.str_title,
+        dte_start_at: eventFormData.dte_start_at,
+        dte_end_at: eventFormData.dte_end_at,
+        ref_category_id: null,
+        bln_allow_overlap: false,
+        ref_shared_calendar_id: eventFormData.ref_shared_calendar_id || null,
+      })
 
-    if (selectedNote) {
-      linkMeetingToEvent(selectedNote.tbl_meeting_note_id, newEvent.tbl_event_id)
+      if (selectedNote) {
+        await linkMeetingToEvent(selectedNote.tbl_meeting_note_id, newEvent.tbl_event_id)
+      }
+
+      toast.success('캘린더에 일정이 추가되었습니다.')
+      setIsEventFormOpen(false)
+    } catch {
+      toast.error('일정 생성 중 오류가 발생했습니다.')
     }
-
-    toast.success('캘린더에 일정이 추가되었습니다.')
-    setIsEventFormOpen(false)
   }
 
   const getLinkedEvents = (noteId: string): Event[] => {

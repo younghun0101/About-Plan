@@ -1,8 +1,8 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { AuthUser, User } from '@/lib/types'
-import { loadData, saveData } from '@/lib/store'
+import { apiRequest, clearAccessToken, getAccessToken, setAccessToken } from '@/lib/api'
 
 interface AuthContextType {
   user: AuthUser | null
@@ -14,59 +14,100 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
+const KNOWN_USERS: User[] = [
+  {
+    tbl_user_id: 'user-a-001',
+    str_name: 'User A',
+    str_email: 'usera@aboutplan.com',
+    str_password_hash: '',
+  },
+  {
+    tbl_user_id: 'user-b-002',
+    str_name: 'User B',
+    str_email: 'userb@aboutplan.com',
+    str_password_hash: '',
+  },
+]
+
+interface AuthResponse {
+  token: string
+  user: AuthUser
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const data = loadData()
-    if (data.currentUser) {
-      setUser(data.currentUser)
+    let mounted = true
+
+    const bootstrap = async () => {
+      const token = getAccessToken()
+      if (!token) {
+        if (mounted) setIsLoading(false)
+        return
+      }
+
+      try {
+        const me = await apiRequest<AuthUser>('/api/auth/me')
+        if (mounted) {
+          setUser(me)
+        }
+      } catch {
+        clearAccessToken()
+        if (mounted) {
+          setUser(null)
+        }
+      } finally {
+        if (mounted) {
+          setIsLoading(false)
+        }
+      }
     }
-    setIsLoading(false)
+
+    void bootstrap()
+
+    return () => {
+      mounted = false
+    }
   }, [])
 
   const login = useCallback(async (email: string, password: string) => {
-    const data = loadData()
-    const foundUser = data.users.find(
-      (u) => u.str_email === email && u.str_password_hash === password
-    )
+    try {
+      const response = await apiRequest<AuthResponse>(
+        '/api/auth/login',
+        {
+          method: 'POST',
+          body: JSON.stringify({ email, password }),
+        },
+        { auth: false },
+      )
 
-    if (!foundUser) {
-      return { success: false, error: '이메일 또는 비밀번호가 올바르지 않습니다.' }
+      setAccessToken(response.token)
+      setUser(response.user)
+      return { success: true }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '로그인에 실패했습니다.'
+      return { success: false, error: message }
     }
-
-    const authUser: AuthUser = {
-      id: foundUser.tbl_user_id,
-      name: foundUser.str_name,
-      email: foundUser.str_email,
-    }
-
-    data.currentUser = authUser
-    saveData(data)
-    setUser(authUser)
-
-    return { success: true }
   }, [])
 
   const logout = useCallback(() => {
-    const data = loadData()
-    data.currentUser = null
-    saveData(data)
+    clearAccessToken()
     setUser(null)
   }, [])
 
   const getOtherUser = useCallback(() => {
     if (!user) return null
-    const data = loadData()
-    return data.users.find((u) => u.tbl_user_id !== user.id) || null
+    return KNOWN_USERS.find((candidate) => candidate.tbl_user_id !== user.id) || null
   }, [user])
 
-  return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout, getOtherUser }}>
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({ user, isLoading, login, logout, getOtherUser }),
+    [user, isLoading, login, logout, getOtherUser],
   )
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
