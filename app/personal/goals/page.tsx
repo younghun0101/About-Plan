@@ -91,7 +91,7 @@ export default function PersonalGoalsPage() {
     setIsFormOpen(true)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     if (!formData.str_title.trim()) {
@@ -104,27 +104,38 @@ export default function PersonalGoalsPage() {
       return
     }
 
-    if (selectedGoal) {
-      updateGoal(selectedGoal.tbl_goal_id, formData)
-      toast.success('목표가 수정되었습니다.')
-    } else {
-      createGoal(formData)
-      toast.success('목표가 생성되었습니다.')
+    try {
+      if (selectedGoal) {
+        await updateGoal(selectedGoal.tbl_goal_id, formData)
+        toast.success('목표가 수정되었습니다.')
+      } else {
+        await createGoal(formData)
+        toast.success('목표가 생성되었습니다.')
+      }
+      setIsFormOpen(false)
+    } catch {
+      toast.error('목표 저장 중 오류가 발생했습니다.')
     }
-    
-    setIsFormOpen(false)
   }
 
-  const handleToggleComplete = (goal: Goal) => {
-    updateGoal(goal.tbl_goal_id, { bln_is_completed: !goal.bln_is_completed })
-    toast.success(goal.bln_is_completed ? '목표가 미완료 상태로 변경되었습니다.' : '목표가 완료되었습니다!')
+  const handleToggleComplete = async (goal: Goal) => {
+    try {
+      await updateGoal(goal.tbl_goal_id, { bln_is_completed: !goal.bln_is_completed })
+      toast.success(goal.bln_is_completed ? '목표가 미완료 상태로 변경되었습니다.' : '목표가 완료되었습니다!')
+    } catch {
+      toast.error('목표 상태 변경 중 오류가 발생했습니다.')
+    }
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (goalToDelete) {
-      deleteGoal(goalToDelete.tbl_goal_id)
-      toast.success('목표가 삭제되었습니다.')
-      setGoalToDelete(null)
+      try {
+        await deleteGoal(goalToDelete.tbl_goal_id)
+        toast.success('목표가 삭제되었습니다.')
+        setGoalToDelete(null)
+      } catch {
+        toast.error('목표 삭제 중 오류가 발생했습니다.')
+      }
     }
   }
 

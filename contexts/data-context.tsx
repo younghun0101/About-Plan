@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type {
   Event,
   Goal,
@@ -16,11 +16,10 @@ import type {
   BoardPostFormData,
   CategoryFormData,
 } from '@/lib/types'
-import { loadData, saveData, generateId } from '@/lib/store'
+import { apiRequest } from '@/lib/api'
 import { useAuth } from './auth-context'
 
 interface DataContextType {
-  // Data
   events: Event[]
   goals: Goal[]
   categories: Category[]
@@ -29,62 +28,170 @@ interface DataContextType {
   boardPosts: BoardPost[]
   boardItems: BoardItem[]
   sharedCalendars: SharedCalendar[]
-  
-  // Events CRUD
-  createEvent: (data: EventFormData) => Event
-  updateEvent: (id: string, data: Partial<EventFormData>) => Event | null
-  deleteEvent: (id: string) => boolean
+
+  createEvent: (data: EventFormData) => Promise<Event>
+  updateEvent: (id: string, data: Partial<EventFormData>) => Promise<Event | null>
+  deleteEvent: (id: string) => Promise<boolean>
   getEventsByUser: (userId: string) => Event[]
   getSharedEvents: (calendarId: string) => Event[]
-  
-  // Goals CRUD
-  createGoal: (data: GoalFormData) => Goal
-  updateGoal: (id: string, data: Partial<GoalFormData & { bln_is_completed: boolean }>) => Goal | null
-  deleteGoal: (id: string) => boolean
+
+  createGoal: (data: GoalFormData) => Promise<Goal>
+  updateGoal: (id: string, data: Partial<GoalFormData & { bln_is_completed: boolean }>) => Promise<Goal | null>
+  deleteGoal: (id: string) => Promise<boolean>
   getPersonalGoals: () => Goal[]
   getSharedGoals: (calendarId: string) => Goal[]
-  
-  // Categories CRUD
-  createCategory: (data: CategoryFormData) => Category
-  updateCategory: (id: string, data: Partial<CategoryFormData>) => Category | null
-  deleteCategory: (id: string) => boolean
+
+  createCategory: (data: CategoryFormData) => Promise<Category>
+  updateCategory: (id: string, data: Partial<CategoryFormData>) => Promise<Category | null>
+  deleteCategory: (id: string) => Promise<boolean>
   getUserCategories: () => Category[]
-  
-  // Meeting Notes CRUD
-  createMeetingNote: (data: MeetingNoteFormData) => MeetingNote
-  updateMeetingNote: (id: string, data: Partial<MeetingNoteFormData>) => MeetingNote | null
-  deleteMeetingNote: (id: string) => boolean
-  linkMeetingToEvent: (meetingId: string, eventId: string) => void
-  unlinkMeetingFromEvent: (meetingId: string, eventId: string) => void
+
+  createMeetingNote: (data: MeetingNoteFormData) => Promise<MeetingNote>
+  updateMeetingNote: (id: string, data: Partial<MeetingNoteFormData>) => Promise<MeetingNote | null>
+  deleteMeetingNote: (id: string) => Promise<boolean>
+  linkMeetingToEvent: (meetingId: string, eventId: string) => Promise<void>
+  unlinkMeetingFromEvent: (meetingId: string, eventId: string) => Promise<void>
   getMeetingEvents: (meetingId: string) => Event[]
-  
-  // Board Posts CRUD
-  createBoardPost: (data: BoardPostFormData) => BoardPost
-  updateBoardPost: (id: string, data: Partial<BoardPostFormData>) => BoardPost | null
-  deleteBoardPost: (id: string) => boolean
-  
-  // Board Items CRUD
-  createBoardItem: (postId: string, content: string) => BoardItem
-  updateBoardItem: (id: string, content: string) => BoardItem | null
-  deleteBoardItem: (id: string) => boolean
+
+  createBoardPost: (data: BoardPostFormData) => Promise<BoardPost>
+  updateBoardPost: (id: string, data: Partial<BoardPostFormData>) => Promise<BoardPost | null>
+  deleteBoardPost: (id: string) => Promise<boolean>
+
+  createBoardItem: (postId: string, content: string) => Promise<BoardItem>
+  updateBoardItem: (id: string, content: string) => Promise<BoardItem | null>
+  deleteBoardItem: (id: string) => Promise<boolean>
   getBoardItems: (postId: string) => BoardItem[]
-  
-  // Shared Calendars
-  createSharedCalendar: (name: string) => SharedCalendar
-  updateSharedCalendar: (id: string, name: string) => SharedCalendar | null
-  deleteSharedCalendar: (id: string) => boolean
-  
-  // Conflict detection
+
+  createSharedCalendar: (name: string) => Promise<SharedCalendar>
+  updateSharedCalendar: (id: string, name: string) => Promise<SharedCalendar | null>
+  deleteSharedCalendar: (id: string) => Promise<boolean>
+
   checkConflict: (startAt: Date, endAt: Date, excludeEventId?: string) => boolean
-  
-  // Refresh
-  refresh: () => void
+  refresh: () => Promise<void>
 }
 
 const DataContext = createContext<DataContextType | null>(null)
 
+function toDate(value: string | Date | null | undefined): Date {
+  return value instanceof Date ? value : new Date(value || new Date().toISOString())
+}
+
+function toNullable(value: string | null | undefined): string | null {
+  if (value == null) return null
+  const trimmed = value.trim()
+  return trimmed ? trimmed : null
+}
+
+function toIso(value: string): string {
+  return new Date(value).toISOString()
+}
+
+function mapEvent(raw: {
+  tbl_event_id: string
+  str_title: string
+  dte_start_at: string
+  dte_end_at: string
+  ref_user_id: string | null
+  ref_shared_calendar_id: string | null
+  ref_category_id: string | null
+  bln_allow_overlap: boolean
+  opt_source_type: 'manual' | 'meeting' | 'goal'
+  ref_source_id: string | null
+  dte_deleted_at: string | null
+}): Event {
+  return {
+    ...raw,
+    dte_start_at: toDate(raw.dte_start_at),
+    dte_end_at: toDate(raw.dte_end_at),
+    dte_deleted_at: raw.dte_deleted_at ? toDate(raw.dte_deleted_at) : null,
+  }
+}
+
+function mapGoal(raw: {
+  tbl_goal_id: string
+  str_title: string
+  str_description: string
+  dte_deadline: string
+  bln_is_completed: boolean
+  ref_user_id: string | null
+  ref_shared_calendar_id: string | null
+  dte_created_at: string
+}): Goal {
+  return {
+    ...raw,
+    dte_deadline: toDate(raw.dte_deadline),
+    dte_created_at: toDate(raw.dte_created_at),
+  }
+}
+
+function mapCategory(raw: {
+  tbl_category_id: string
+  str_name: string
+  str_color: string
+  opt_style: 'dot' | 'highlight'
+  ref_user_id: string
+}): Category {
+  return raw
+}
+
+function mapMeetingNote(raw: {
+  tbl_meeting_note_id: string
+  str_title: string
+  str_type: MeetingNote['str_type']
+  str_content: string
+  ref_created_by: string
+  dte_created_at: string
+  dte_updated_at: string
+}): MeetingNote {
+  return {
+    ...raw,
+    dte_created_at: toDate(raw.dte_created_at),
+    dte_updated_at: toDate(raw.dte_updated_at),
+  }
+}
+
+function mapBoardPost(raw: {
+  tbl_board_post_id: string
+  str_title: string
+  str_content: string
+  ref_created_by: string
+  dte_created_at: string
+  dte_updated_at: string
+}): BoardPost {
+  return {
+    ...raw,
+    dte_created_at: toDate(raw.dte_created_at),
+    dte_updated_at: toDate(raw.dte_updated_at),
+  }
+}
+
+function mapBoardItem(raw: {
+  tbl_board_item_id: string
+  str_content: string
+  ref_board_post_id: string
+  ref_created_by: string
+  dte_created_at: string
+}): BoardItem {
+  return {
+    ...raw,
+    dte_created_at: toDate(raw.dte_created_at),
+  }
+}
+
+function mapSharedCalendar(raw: {
+  tbl_shared_calendar_id: string
+  str_name: string
+  ref_created_by: string
+  dte_created_at: string
+}): SharedCalendar {
+  return {
+    ...raw,
+    dte_created_at: toDate(raw.dte_created_at),
+  }
+}
+
 export function DataProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const [events, setEvents] = useState<Event[]>([])
   const [goals, setGoals] = useState<Goal[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -94,453 +201,463 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [boardItems, setBoardItems] = useState<BoardItem[]>([])
   const [sharedCalendars, setSharedCalendars] = useState<SharedCalendar[]>([])
 
-  const refresh = useCallback(() => {
-    const data = loadData()
-    setEvents(data.events.filter(e => !e.dte_deleted_at))
-    setGoals(data.goals)
-    setCategories(data.categories)
-    setMeetingNotes(data.meetingNotes)
-    setMeetingEvents(data.meetingEvents)
-    setBoardPosts(data.boardPosts)
-    setBoardItems(data.boardItems)
-    setSharedCalendars(data.sharedCalendars)
+  const clearAll = useCallback(() => {
+    setEvents([])
+    setGoals([])
+    setCategories([])
+    setMeetingNotes([])
+    setMeetingEvents([])
+    setBoardPosts([])
+    setBoardItems([])
+    setSharedCalendars([])
   }, [])
 
-  useEffect(() => {
-    refresh()
-  }, [refresh])
-
-  // Events CRUD
-  const createEvent = useCallback((formData: EventFormData): Event => {
-    const data = loadData()
-    const newEvent: Event = {
-      tbl_event_id: generateId(),
-      str_title: formData.str_title,
-      dte_start_at: new Date(formData.dte_start_at),
-      dte_end_at: new Date(formData.dte_end_at),
-      ref_user_id: formData.ref_shared_calendar_id ? null : user?.id || null,
-      ref_shared_calendar_id: formData.ref_shared_calendar_id,
-      ref_category_id: formData.ref_category_id,
-      bln_allow_overlap: formData.bln_allow_overlap,
-      opt_source_type: 'manual',
-      ref_source_id: null,
-      dte_deleted_at: null,
+  const refresh = useCallback(async () => {
+    if (!user) {
+      clearAll()
+      return
     }
-    data.events.push(newEvent)
-    saveData(data)
-    refresh()
-    return newEvent
-  }, [user, refresh])
 
-  const updateEvent = useCallback((id: string, formData: Partial<EventFormData>): Event | null => {
-    const data = loadData()
-    const idx = data.events.findIndex(e => e.tbl_event_id === id)
-    if (idx === -1) return null
-    
-    const event = data.events[idx]
-    if (formData.str_title !== undefined) event.str_title = formData.str_title
-    if (formData.dte_start_at !== undefined) event.dte_start_at = new Date(formData.dte_start_at)
-    if (formData.dte_end_at !== undefined) event.dte_end_at = new Date(formData.dte_end_at)
-    if (formData.ref_category_id !== undefined) event.ref_category_id = formData.ref_category_id
-    if (formData.bln_allow_overlap !== undefined) event.bln_allow_overlap = formData.bln_allow_overlap
-    
-    saveData(data)
-    refresh()
-    return event
+    try {
+      const [
+        rawEvents,
+        rawGoals,
+        rawCategories,
+        rawMeetingNotes,
+        rawBoardPosts,
+        rawSharedCalendars,
+      ] = await Promise.all([
+        apiRequest<Array<Parameters<typeof mapEvent>[0]>>('/api/events?scope=all'),
+        apiRequest<Array<Parameters<typeof mapGoal>[0]>>('/api/goals?scope=all'),
+        apiRequest<Array<Parameters<typeof mapCategory>[0]>>('/api/categories'),
+        apiRequest<Array<Parameters<typeof mapMeetingNote>[0]>>('/api/meeting-notes'),
+        apiRequest<Array<Parameters<typeof mapBoardPost>[0]>>('/api/board-posts'),
+        apiRequest<Array<Parameters<typeof mapSharedCalendar>[0]>>('/api/shared-calendars'),
+      ])
+
+      const [meetingEventGroups, boardItemGroups] = await Promise.all([
+        Promise.all(
+          rawMeetingNotes.map(async (note) => {
+            const linked = await apiRequest<Array<{ ref_meeting_note_id: string; ref_event_id: string }>>(
+              `/api/meeting-notes/${note.tbl_meeting_note_id}/events`,
+            )
+            return linked.map((item) => ({
+              ref_meeting_note_id: item.ref_meeting_note_id,
+              ref_event_id: item.ref_event_id,
+            }))
+          }),
+        ),
+        Promise.all(
+          rawBoardPosts.map(async (post) => {
+            const items = await apiRequest<Array<Parameters<typeof mapBoardItem>[0]>>(
+              `/api/board-posts/${post.tbl_board_post_id}/items`,
+            )
+            return items.map(mapBoardItem)
+          }),
+        ),
+      ])
+
+      setEvents(rawEvents.map(mapEvent).filter((event) => !event.dte_deleted_at))
+      setGoals(rawGoals.map(mapGoal))
+      setCategories(rawCategories.map(mapCategory))
+      setMeetingNotes(rawMeetingNotes.map(mapMeetingNote))
+      setMeetingEvents(meetingEventGroups.flat())
+      setBoardPosts(rawBoardPosts.map(mapBoardPost))
+      setBoardItems(boardItemGroups.flat())
+      setSharedCalendars(rawSharedCalendars.map(mapSharedCalendar))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ''
+      if (message.toLowerCase().includes('unauthorized') || message.includes('401')) {
+        logout()
+      }
+      throw error
+    }
+  }, [user, logout, clearAll])
+
+  useEffect(() => {
+    void refresh().catch(() => undefined)
   }, [refresh])
 
-  const deleteEvent = useCallback((id: string): boolean => {
-    const data = loadData()
-    const idx = data.events.findIndex(e => e.tbl_event_id === id)
-    if (idx === -1) return false
-    
-    // Soft delete
-    data.events[idx].dte_deleted_at = new Date()
-    saveData(data)
-    refresh()
+  const createEvent = useCallback(async (formData: EventFormData): Promise<Event> => {
+    const created = await apiRequest<Parameters<typeof mapEvent>[0]>('/api/events', {
+      method: 'POST',
+      body: JSON.stringify({
+        str_title: formData.str_title,
+        dte_start_at: toIso(formData.dte_start_at),
+        dte_end_at: toIso(formData.dte_end_at),
+        ref_category_id: toNullable(formData.ref_category_id),
+        bln_allow_overlap: formData.bln_allow_overlap,
+        ref_shared_calendar_id: toNullable(formData.ref_shared_calendar_id),
+      }),
+    })
+    const mapped = mapEvent(created)
+    await refresh()
+    return mapped
+  }, [refresh])
+
+  const updateEvent = useCallback(async (id: string, formData: Partial<EventFormData>): Promise<Event | null> => {
+    const payload: Record<string, unknown> = {}
+
+    if (formData.str_title !== undefined) payload.str_title = formData.str_title
+    if (formData.dte_start_at !== undefined) payload.dte_start_at = toIso(formData.dte_start_at)
+    if (formData.dte_end_at !== undefined) payload.dte_end_at = toIso(formData.dte_end_at)
+    if (formData.ref_category_id !== undefined) payload.ref_category_id = toNullable(formData.ref_category_id)
+    if (formData.bln_allow_overlap !== undefined) payload.bln_allow_overlap = formData.bln_allow_overlap
+    if (formData.ref_shared_calendar_id !== undefined) {
+      payload.ref_shared_calendar_id = toNullable(formData.ref_shared_calendar_id)
+    }
+
+    if (Object.keys(payload).length === 0) return null
+
+    const updated = await apiRequest<Parameters<typeof mapEvent>[0]>(`/api/events/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    })
+    const mapped = mapEvent(updated)
+    await refresh()
+    return mapped
+  }, [refresh])
+
+  const deleteEvent = useCallback(async (id: string): Promise<boolean> => {
+    await apiRequest<{ message: string }>(`/api/events/${id}`, { method: 'DELETE' })
+    await refresh()
     return true
   }, [refresh])
 
   const getEventsByUser = useCallback((userId: string): Event[] => {
-    return events.filter(e => e.ref_user_id === userId && !e.dte_deleted_at)
+    return events.filter((event) => event.ref_user_id === userId && !event.dte_deleted_at)
   }, [events])
 
   const getSharedEvents = useCallback((calendarId: string): Event[] => {
-    return events.filter(e => e.ref_shared_calendar_id === calendarId && !e.dte_deleted_at)
+    return events.filter((event) => event.ref_shared_calendar_id === calendarId && !event.dte_deleted_at)
   }, [events])
 
-  // Goals CRUD
-  const createGoal = useCallback((formData: GoalFormData): Goal => {
-    const data = loadData()
-    const newGoal: Goal = {
-      tbl_goal_id: generateId(),
-      str_title: formData.str_title,
-      str_description: formData.str_description || '',
-      dte_deadline: new Date(formData.dte_deadline),
-      bln_is_completed: false,
-      ref_user_id: formData.ref_shared_calendar_id ? null : user?.id || null,
-      ref_shared_calendar_id: formData.ref_shared_calendar_id,
-      dte_created_at: new Date(),
-    }
-    data.goals.push(newGoal)
-    saveData(data)
-    refresh()
-    return newGoal
-  }, [user, refresh])
-
-  const updateGoal = useCallback((id: string, formData: Partial<GoalFormData & { bln_is_completed: boolean }>): Goal | null => {
-    const data = loadData()
-    const idx = data.goals.findIndex(g => g.tbl_goal_id === id)
-    if (idx === -1) return null
-    
-    const goal = data.goals[idx]
-    if (formData.str_title !== undefined) goal.str_title = formData.str_title
-    if (formData.str_description !== undefined) goal.str_description = formData.str_description
-    if (formData.dte_deadline !== undefined) goal.dte_deadline = new Date(formData.dte_deadline)
-    if (formData.bln_is_completed !== undefined) goal.bln_is_completed = formData.bln_is_completed
-    
-    saveData(data)
-    refresh()
-    return goal
+  const createGoal = useCallback(async (formData: GoalFormData): Promise<Goal> => {
+    const created = await apiRequest<Parameters<typeof mapGoal>[0]>('/api/goals', {
+      method: 'POST',
+      body: JSON.stringify({
+        str_title: formData.str_title,
+        str_description: formData.str_description || '',
+        dte_deadline: toIso(formData.dte_deadline),
+        ref_shared_calendar_id: toNullable(formData.ref_shared_calendar_id),
+      }),
+    })
+    const mapped = mapGoal(created)
+    await refresh()
+    return mapped
   }, [refresh])
 
-  const deleteGoal = useCallback((id: string): boolean => {
-    const data = loadData()
-    const idx = data.goals.findIndex(g => g.tbl_goal_id === id)
-    if (idx === -1) return false
-    
-    data.goals.splice(idx, 1)
-    saveData(data)
-    refresh()
+  const updateGoal = useCallback(async (
+    id: string,
+    formData: Partial<GoalFormData & { bln_is_completed: boolean }>,
+  ): Promise<Goal | null> => {
+    const payload: Record<string, unknown> = {}
+
+    if (formData.str_title !== undefined) payload.str_title = formData.str_title
+    if (formData.str_description !== undefined) payload.str_description = formData.str_description
+    if (formData.dte_deadline !== undefined) payload.dte_deadline = toIso(formData.dte_deadline)
+    if (formData.bln_is_completed !== undefined) payload.bln_is_completed = formData.bln_is_completed
+    if (formData.ref_shared_calendar_id !== undefined) {
+      payload.ref_shared_calendar_id = toNullable(formData.ref_shared_calendar_id)
+    }
+
+    if (Object.keys(payload).length === 0) return null
+
+    const updated = await apiRequest<Parameters<typeof mapGoal>[0]>(`/api/goals/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    })
+    const mapped = mapGoal(updated)
+    await refresh()
+    return mapped
+  }, [refresh])
+
+  const deleteGoal = useCallback(async (id: string): Promise<boolean> => {
+    await apiRequest<{ message: string }>(`/api/goals/${id}`, { method: 'DELETE' })
+    await refresh()
     return true
   }, [refresh])
 
   const getPersonalGoals = useCallback((): Goal[] => {
-    return goals.filter(g => g.ref_user_id === user?.id)
+    return goals.filter((goal) => goal.ref_user_id === user?.id)
   }, [goals, user])
 
   const getSharedGoals = useCallback((calendarId: string): Goal[] => {
-    return goals.filter(g => g.ref_shared_calendar_id === calendarId)
+    return goals.filter((goal) => goal.ref_shared_calendar_id === calendarId)
   }, [goals])
 
-  // Categories CRUD
-  const createCategory = useCallback((formData: CategoryFormData): Category => {
-    const data = loadData()
-    const newCategory: Category = {
-      tbl_category_id: generateId(),
-      str_name: formData.str_name,
-      str_color: formData.str_color,
-      opt_style: formData.opt_style,
-      ref_user_id: user?.id || '',
-    }
-    data.categories.push(newCategory)
-    saveData(data)
-    refresh()
-    return newCategory
-  }, [user, refresh])
-
-  const updateCategory = useCallback((id: string, formData: Partial<CategoryFormData>): Category | null => {
-    const data = loadData()
-    const idx = data.categories.findIndex(c => c.tbl_category_id === id)
-    if (idx === -1) return null
-    
-    const category = data.categories[idx]
-    if (formData.str_name !== undefined) category.str_name = formData.str_name
-    if (formData.str_color !== undefined) category.str_color = formData.str_color
-    if (formData.opt_style !== undefined) category.opt_style = formData.opt_style
-    
-    saveData(data)
-    refresh()
-    return category
+  const createCategory = useCallback(async (formData: CategoryFormData): Promise<Category> => {
+    const created = await apiRequest<Parameters<typeof mapCategory>[0]>('/api/categories', {
+      method: 'POST',
+      body: JSON.stringify(formData),
+    })
+    const mapped = mapCategory(created)
+    await refresh()
+    return mapped
   }, [refresh])
 
-  const deleteCategory = useCallback((id: string): boolean => {
-    const data = loadData()
-    const idx = data.categories.findIndex(c => c.tbl_category_id === id)
-    if (idx === -1) return false
-    
-    data.categories.splice(idx, 1)
-    saveData(data)
-    refresh()
+  const updateCategory = useCallback(async (id: string, formData: Partial<CategoryFormData>): Promise<Category | null> => {
+    if (Object.keys(formData).length === 0) return null
+
+    const updated = await apiRequest<Parameters<typeof mapCategory>[0]>(`/api/categories/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(formData),
+    })
+    const mapped = mapCategory(updated)
+    await refresh()
+    return mapped
+  }, [refresh])
+
+  const deleteCategory = useCallback(async (id: string): Promise<boolean> => {
+    await apiRequest<{ message: string }>(`/api/categories/${id}`, { method: 'DELETE' })
+    await refresh()
     return true
   }, [refresh])
 
   const getUserCategories = useCallback((): Category[] => {
-    return categories.filter(c => c.ref_user_id === user?.id)
+    return categories.filter((category) => category.ref_user_id === user?.id)
   }, [categories, user])
 
-  // Meeting Notes CRUD
-  const createMeetingNote = useCallback((formData: MeetingNoteFormData): MeetingNote => {
-    const data = loadData()
-    const now = new Date()
-    const newNote: MeetingNote = {
-      tbl_meeting_note_id: generateId(),
-      str_title: formData.str_title,
-      str_type: formData.str_type || 'general',
-      str_content: formData.str_content,
-      ref_created_by: user?.id || '',
-      dte_created_at: now,
-      dte_updated_at: now,
-    }
-    data.meetingNotes.push(newNote)
-    saveData(data)
-    refresh()
-    return newNote
-  }, [user, refresh])
-
-  const updateMeetingNote = useCallback((id: string, formData: Partial<MeetingNoteFormData>): MeetingNote | null => {
-    const data = loadData()
-    const idx = data.meetingNotes.findIndex(n => n.tbl_meeting_note_id === id)
-    if (idx === -1) return null
-    
-    const note = data.meetingNotes[idx]
-    if (formData.str_title !== undefined) note.str_title = formData.str_title
-    if (formData.str_type !== undefined) note.str_type = formData.str_type
-    if (formData.str_content !== undefined) note.str_content = formData.str_content
-    note.dte_updated_at = new Date()
-    
-    saveData(data)
-    refresh()
-    return note
+  const createMeetingNote = useCallback(async (formData: MeetingNoteFormData): Promise<MeetingNote> => {
+    const created = await apiRequest<Parameters<typeof mapMeetingNote>[0]>('/api/meeting-notes', {
+      method: 'POST',
+      body: JSON.stringify(formData),
+    })
+    const mapped = mapMeetingNote(created)
+    await refresh()
+    return mapped
   }, [refresh])
 
-  const deleteMeetingNote = useCallback((id: string): boolean => {
-    const data = loadData()
-    const idx = data.meetingNotes.findIndex(n => n.tbl_meeting_note_id === id)
-    if (idx === -1) return false
-    
-    // Also remove linked meeting events
-    data.meetingEvents = data.meetingEvents.filter(me => me.ref_meeting_note_id !== id)
-    data.meetingNotes.splice(idx, 1)
-    saveData(data)
-    refresh()
+  const updateMeetingNote = useCallback(async (
+    id: string,
+    formData: Partial<MeetingNoteFormData>,
+  ): Promise<MeetingNote | null> => {
+    if (Object.keys(formData).length === 0) return null
+
+    const updated = await apiRequest<Parameters<typeof mapMeetingNote>[0]>(`/api/meeting-notes/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(formData),
+    })
+    const mapped = mapMeetingNote(updated)
+    await refresh()
+    return mapped
+  }, [refresh])
+
+  const deleteMeetingNote = useCallback(async (id: string): Promise<boolean> => {
+    await apiRequest<{ message: string }>(`/api/meeting-notes/${id}`, { method: 'DELETE' })
+    await refresh()
     return true
   }, [refresh])
 
-  const linkMeetingToEvent = useCallback((meetingId: string, eventId: string): void => {
-    const data = loadData()
-    const exists = data.meetingEvents.some(
-      me => me.ref_meeting_note_id === meetingId && me.ref_event_id === eventId
-    )
-    if (!exists) {
-      data.meetingEvents.push({ ref_meeting_note_id: meetingId, ref_event_id: eventId })
-      saveData(data)
-      refresh()
-    }
+  const linkMeetingToEvent = useCallback(async (meetingId: string, eventId: string): Promise<void> => {
+    await apiRequest<{ message: string }>(`/api/meeting-notes/${meetingId}/events/${eventId}`, {
+      method: 'POST',
+    })
+    await refresh()
   }, [refresh])
 
-  const unlinkMeetingFromEvent = useCallback((meetingId: string, eventId: string): void => {
-    const data = loadData()
-    data.meetingEvents = data.meetingEvents.filter(
-      me => !(me.ref_meeting_note_id === meetingId && me.ref_event_id === eventId)
-    )
-    saveData(data)
-    refresh()
+  const unlinkMeetingFromEvent = useCallback(async (meetingId: string, eventId: string): Promise<void> => {
+    await apiRequest<{ message: string }>(`/api/meeting-notes/${meetingId}/events/${eventId}`, {
+      method: 'DELETE',
+    })
+    await refresh()
   }, [refresh])
 
   const getMeetingEvents = useCallback((meetingId: string): Event[] => {
     const eventIds = meetingEvents
-      .filter(me => me.ref_meeting_note_id === meetingId)
-      .map(me => me.ref_event_id)
-    return events.filter(e => eventIds.includes(e.tbl_event_id))
+      .filter((link) => link.ref_meeting_note_id === meetingId)
+      .map((link) => link.ref_event_id)
+
+    return events.filter((event) => eventIds.includes(event.tbl_event_id))
   }, [meetingEvents, events])
 
-  // Board Posts CRUD
-  const createBoardPost = useCallback((formData: BoardPostFormData): BoardPost => {
-    const data = loadData()
-    const now = new Date()
-    const newPost: BoardPost = {
-      tbl_board_post_id: generateId(),
-      str_title: formData.str_title,
-      str_content: formData.str_content,
-      ref_created_by: user?.id || '',
-      dte_created_at: now,
-      dte_updated_at: now,
-    }
-    data.boardPosts.push(newPost)
-    saveData(data)
-    refresh()
-    return newPost
-  }, [user, refresh])
-
-  const updateBoardPost = useCallback((id: string, formData: Partial<BoardPostFormData>): BoardPost | null => {
-    const data = loadData()
-    const idx = data.boardPosts.findIndex(p => p.tbl_board_post_id === id)
-    if (idx === -1) return null
-    
-    const post = data.boardPosts[idx]
-    if (formData.str_title !== undefined) post.str_title = formData.str_title
-    if (formData.str_content !== undefined) post.str_content = formData.str_content
-    post.dte_updated_at = new Date()
-    
-    saveData(data)
-    refresh()
-    return post
+  const createBoardPost = useCallback(async (formData: BoardPostFormData): Promise<BoardPost> => {
+    const created = await apiRequest<Parameters<typeof mapBoardPost>[0]>('/api/board-posts', {
+      method: 'POST',
+      body: JSON.stringify(formData),
+    })
+    const mapped = mapBoardPost(created)
+    await refresh()
+    return mapped
   }, [refresh])
 
-  const deleteBoardPost = useCallback((id: string): boolean => {
-    const data = loadData()
-    const idx = data.boardPosts.findIndex(p => p.tbl_board_post_id === id)
-    if (idx === -1) return false
-    
-    // Also remove related items
-    data.boardItems = data.boardItems.filter(i => i.ref_board_post_id !== id)
-    data.boardPosts.splice(idx, 1)
-    saveData(data)
-    refresh()
+  const updateBoardPost = useCallback(async (
+    id: string,
+    formData: Partial<BoardPostFormData>,
+  ): Promise<BoardPost | null> => {
+    if (Object.keys(formData).length === 0) return null
+
+    const updated = await apiRequest<Parameters<typeof mapBoardPost>[0]>(`/api/board-posts/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(formData),
+    })
+    const mapped = mapBoardPost(updated)
+    await refresh()
+    return mapped
+  }, [refresh])
+
+  const deleteBoardPost = useCallback(async (id: string): Promise<boolean> => {
+    await apiRequest<{ message: string }>(`/api/board-posts/${id}`, { method: 'DELETE' })
+    await refresh()
     return true
   }, [refresh])
 
-  // Board Items CRUD
-  const createBoardItem = useCallback((postId: string, content: string): BoardItem => {
-    const data = loadData()
-    const newItem: BoardItem = {
-      tbl_board_item_id: generateId(),
-      str_content: content,
-      ref_board_post_id: postId,
-      ref_created_by: user?.id || '',
-      dte_created_at: new Date(),
-    }
-    data.boardItems.push(newItem)
-    saveData(data)
-    refresh()
-    return newItem
-  }, [user, refresh])
-
-  const updateBoardItem = useCallback((id: string, content: string): BoardItem | null => {
-    const data = loadData()
-    const idx = data.boardItems.findIndex(i => i.tbl_board_item_id === id)
-    if (idx === -1) return null
-    
-    data.boardItems[idx].str_content = content
-    saveData(data)
-    refresh()
-    return data.boardItems[idx]
+  const createBoardItem = useCallback(async (postId: string, content: string): Promise<BoardItem> => {
+    const created = await apiRequest<Parameters<typeof mapBoardItem>[0]>(`/api/board-posts/${postId}/items`, {
+      method: 'POST',
+      body: JSON.stringify({ str_content: content }),
+    })
+    const mapped = mapBoardItem(created)
+    await refresh()
+    return mapped
   }, [refresh])
 
-  const deleteBoardItem = useCallback((id: string): boolean => {
-    const data = loadData()
-    const idx = data.boardItems.findIndex(i => i.tbl_board_item_id === id)
-    if (idx === -1) return false
-    
-    data.boardItems.splice(idx, 1)
-    saveData(data)
-    refresh()
+  const updateBoardItem = useCallback(async (id: string, content: string): Promise<BoardItem | null> => {
+    const updated = await apiRequest<Parameters<typeof mapBoardItem>[0]>(`/api/board-items/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ str_content: content }),
+    })
+    const mapped = mapBoardItem(updated)
+    await refresh()
+    return mapped
+  }, [refresh])
+
+  const deleteBoardItem = useCallback(async (id: string): Promise<boolean> => {
+    await apiRequest<{ message: string }>(`/api/board-items/${id}`, { method: 'DELETE' })
+    await refresh()
     return true
   }, [refresh])
 
   const getBoardItems = useCallback((postId: string): BoardItem[] => {
-    return boardItems.filter(i => i.ref_board_post_id === postId)
+    return boardItems.filter((item) => item.ref_board_post_id === postId)
   }, [boardItems])
 
-  // Shared Calendars
-  const createSharedCalendar = useCallback((name: string): SharedCalendar => {
-    const data = loadData()
-    const newCalendar: SharedCalendar = {
-      tbl_shared_calendar_id: generateId(),
-      str_name: name,
-      ref_created_by: user?.id || '',
-      dte_created_at: new Date(),
-    }
-    data.sharedCalendars.push(newCalendar)
-    saveData(data)
-    refresh()
-    return newCalendar
-  }, [user, refresh])
-
-  const updateSharedCalendar = useCallback((id: string, name: string): SharedCalendar | null => {
-    const data = loadData()
-    const idx = data.sharedCalendars.findIndex(c => c.tbl_shared_calendar_id === id)
-    if (idx === -1) return null
-    
-    data.sharedCalendars[idx].str_name = name
-    saveData(data)
-    refresh()
-    return data.sharedCalendars[idx]
+  const createSharedCalendar = useCallback(async (name: string): Promise<SharedCalendar> => {
+    const created = await apiRequest<Parameters<typeof mapSharedCalendar>[0]>('/api/shared-calendars', {
+      method: 'POST',
+      body: JSON.stringify({ str_name: name }),
+    })
+    const mapped = mapSharedCalendar(created)
+    await refresh()
+    return mapped
   }, [refresh])
 
-  const deleteSharedCalendar = useCallback((id: string): boolean => {
-    const data = loadData()
-    const idx = data.sharedCalendars.findIndex(c => c.tbl_shared_calendar_id === id)
-    if (idx === -1) return false
-    
-    // Also remove related events and goals
-    data.events = data.events.filter(e => e.ref_shared_calendar_id !== id)
-    data.goals = data.goals.filter(g => g.ref_shared_calendar_id !== id)
-    data.sharedCalendars.splice(idx, 1)
-    saveData(data)
-    refresh()
+  const updateSharedCalendar = useCallback(async (id: string, name: string): Promise<SharedCalendar | null> => {
+    const updated = await apiRequest<Parameters<typeof mapSharedCalendar>[0]>(`/api/shared-calendars/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ str_name: name }),
+    })
+    const mapped = mapSharedCalendar(updated)
+    await refresh()
+    return mapped
+  }, [refresh])
+
+  const deleteSharedCalendar = useCallback(async (id: string): Promise<boolean> => {
+    await apiRequest<{ message: string }>(`/api/shared-calendars/${id}`, { method: 'DELETE' })
+    await refresh()
     return true
   }, [refresh])
 
-  // Conflict detection
   const checkConflict = useCallback((startAt: Date, endAt: Date, excludeEventId?: string): boolean => {
-    const data = loadData()
-    const activeEvents = data.events.filter(e => !e.dte_deleted_at && e.tbl_event_id !== excludeEventId)
-    
+    const activeEvents = events.filter((event) => !event.dte_deleted_at && event.tbl_event_id !== excludeEventId)
+
     for (const event of activeEvents) {
       const eventStart = new Date(event.dte_start_at)
       const eventEnd = new Date(event.dte_end_at)
-      
-      // Check overlap
-      if (startAt < eventEnd && endAt > eventStart) {
-        if (!event.bln_allow_overlap) {
-          return true
-        }
+
+      if (startAt < eventEnd && endAt > eventStart && !event.bln_allow_overlap) {
+        return true
       }
     }
-    
-    return false
-  }, [])
 
-  return (
-    <DataContext.Provider
-      value={{
-        events,
-        goals,
-        categories,
-        meetingNotes,
-        meetingEvents,
-        boardPosts,
-        boardItems,
-        sharedCalendars,
-        createEvent,
-        updateEvent,
-        deleteEvent,
-        getEventsByUser,
-        getSharedEvents,
-        createGoal,
-        updateGoal,
-        deleteGoal,
-        getPersonalGoals,
-        getSharedGoals,
-        createCategory,
-        updateCategory,
-        deleteCategory,
-        getUserCategories,
-        createMeetingNote,
-        updateMeetingNote,
-        deleteMeetingNote,
-        linkMeetingToEvent,
-        unlinkMeetingFromEvent,
-        getMeetingEvents,
-        createBoardPost,
-        updateBoardPost,
-        deleteBoardPost,
-        createBoardItem,
-        updateBoardItem,
-        deleteBoardItem,
-        getBoardItems,
-        createSharedCalendar,
-        updateSharedCalendar,
-        deleteSharedCalendar,
-        checkConflict,
-        refresh,
-      }}
-    >
-      {children}
-    </DataContext.Provider>
-  )
+    return false
+  }, [events])
+
+  const value = useMemo<DataContextType>(() => ({
+    events,
+    goals,
+    categories,
+    meetingNotes,
+    meetingEvents,
+    boardPosts,
+    boardItems,
+    sharedCalendars,
+    createEvent,
+    updateEvent,
+    deleteEvent,
+    getEventsByUser,
+    getSharedEvents,
+    createGoal,
+    updateGoal,
+    deleteGoal,
+    getPersonalGoals,
+    getSharedGoals,
+    createCategory,
+    updateCategory,
+    deleteCategory,
+    getUserCategories,
+    createMeetingNote,
+    updateMeetingNote,
+    deleteMeetingNote,
+    linkMeetingToEvent,
+    unlinkMeetingFromEvent,
+    getMeetingEvents,
+    createBoardPost,
+    updateBoardPost,
+    deleteBoardPost,
+    createBoardItem,
+    updateBoardItem,
+    deleteBoardItem,
+    getBoardItems,
+    createSharedCalendar,
+    updateSharedCalendar,
+    deleteSharedCalendar,
+    checkConflict,
+    refresh,
+  }), [
+    events,
+    goals,
+    categories,
+    meetingNotes,
+    meetingEvents,
+    boardPosts,
+    boardItems,
+    sharedCalendars,
+    createEvent,
+    updateEvent,
+    deleteEvent,
+    getEventsByUser,
+    getSharedEvents,
+    createGoal,
+    updateGoal,
+    deleteGoal,
+    getPersonalGoals,
+    getSharedGoals,
+    createCategory,
+    updateCategory,
+    deleteCategory,
+    getUserCategories,
+    createMeetingNote,
+    updateMeetingNote,
+    deleteMeetingNote,
+    linkMeetingToEvent,
+    unlinkMeetingFromEvent,
+    getMeetingEvents,
+    createBoardPost,
+    updateBoardPost,
+    deleteBoardPost,
+    createBoardItem,
+    updateBoardItem,
+    deleteBoardItem,
+    getBoardItems,
+    createSharedCalendar,
+    updateSharedCalendar,
+    deleteSharedCalendar,
+    checkConflict,
+    refresh,
+  ])
+
+  return <DataContext.Provider value={value}>{children}</DataContext.Provider>
 }
 
 export function useData() {

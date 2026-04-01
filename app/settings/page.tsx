@@ -39,7 +39,7 @@ export default function SettingsPage() {
     clearData()
     logout()
     router.push('/login')
-    toast.success('모든 데이터가 초기화되었습니다.')
+    toast.success('로컬 캐시가 초기화되었습니다.')
   }
 
   return (
@@ -111,10 +111,10 @@ export default function SettingsPage() {
                 onClick={() => setShowClearDialog(true)}
               >
                 <Trash2 className="mr-2 h-4 w-4" />
-                모든 데이터 초기화
+                로컬 캐시 초기화
               </Button>
               <p className="text-xs text-muted-foreground">
-                모든 일정, 목표, 미팅 노트, 게시판 글이 삭제됩니다. 이 작업은 되돌릴 수 없습니다.
+                기기에 저장된 임시 데이터와 로그인 상태를 초기화합니다.
               </p>
             </div>
           </CardContent>
@@ -128,22 +128,22 @@ export default function SettingsPage() {
           <CardContent className="space-y-2 text-sm text-muted-foreground">
             <p>ABOUT Plan v1.0</p>
             <p>개인 & 공동 플랜 통합 관리 앱</p>
-            <p>데이터는 브라우저의 로컬 스토리지에 저장됩니다.</p>
+            <p>데이터는 백엔드 API 서버에 저장됩니다.</p>
           </CardContent>
         </Card>
 
         <AlertDialog open={showClearDialog} onOpenChange={setShowClearDialog}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>모든 데이터 초기화</AlertDialogTitle>
+              <AlertDialogTitle>로컬 캐시 초기화</AlertDialogTitle>
               <AlertDialogDescription>
-                정말로 모든 데이터를 삭제하시겠습니까? 모든 일정, 목표, 미팅 노트, 게시판 글, 카테고리가 삭제되며, 이 작업은 되돌릴 수 없습니다.
+                이 기기에 저장된 임시 데이터와 로그인 상태를 초기화하시겠습니까?
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>취소</AlertDialogCancel>
               <AlertDialogAction onClick={handleClearData} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                초기화
+                실행
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

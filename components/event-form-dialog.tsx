@@ -33,8 +33,10 @@ interface EventFormDialogProps {
   onOpenChange: (open: boolean) => void
   event?: Event | null
   defaultDate?: Date
+  defaultEndDate?: Date
   isShared?: boolean
   sharedCalendarId?: string | null
+  onDelete?: (event: Event) => void
 }
 
 export function EventFormDialog({
@@ -42,8 +44,10 @@ export function EventFormDialog({
   onOpenChange,
   event,
   defaultDate,
+  defaultEndDate,
   isShared = false,
   sharedCalendarId = null,
+  onDelete,
 }: EventFormDialogProps) {
   const { createEvent, updateEvent, getUserCategories, checkConflict } = useData()
   const categories = getUserCategories()
@@ -71,8 +75,11 @@ export function EventFormDialog({
       })
     } else if (defaultDate) {
       const startDate = new Date(defaultDate)
-      const endDate = new Date(defaultDate)
-      endDate.setHours(endDate.getHours() + 1)
+      const endDate = defaultEndDate ? new Date(defaultEndDate) : new Date(defaultDate)
+
+      if (!defaultEndDate || endDate <= startDate) {
+        endDate.setHours(endDate.getHours() + 1)
+      }
       
       setFormData({
         str_title: '',
@@ -83,7 +90,7 @@ export function EventFormDialog({
         ref_shared_calendar_id: isShared ? sharedCalendarId : null,
       })
     }
-  }, [event, defaultDate, isShared, sharedCalendarId])
+  }, [event, defaultDate, defaultEndDate, isShared, sharedCalendarId])
 
   useEffect(() => {
     if (formData.dte_start_at && formData.dte_end_at) {
@@ -123,10 +130,10 @@ export function EventFormDialog({
     
     try {
       if (event) {
-        updateEvent(event.tbl_event_id, formData)
+        await updateEvent(event.tbl_event_id, formData)
         toast.success('일정이 수정되었습니다.')
       } else {
-        createEvent({
+        await createEvent({
           ...formData,
           ref_shared_calendar_id: isShared ? sharedCalendarId : null,
         })
@@ -244,13 +251,29 @@ export function EventFormDialog({
           </FieldGroup>
           
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
-              취소
-            </Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading && <Spinner className="mr-2" />}
-              {event ? '수정' : '생성'}
-            </Button>
+            <div className="flex w-full items-center justify-between gap-2">
+              {event && onDelete ? (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => onDelete(event)}
+                  disabled={isLoading}
+                >
+                  삭제
+                </Button>
+              ) : (
+                <span />
+              )}
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
+                  취소
+                </Button>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading && <Spinner className="mr-2" />}
+                  {event ? '수정' : '생성'}
+                </Button>
+              </div>
+            </div>
           </DialogFooter>
         </form>
       </DialogContent>

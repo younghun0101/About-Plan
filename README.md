@@ -34,4 +34,8 @@ To learn more, take a look at the following resources:
 - [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 - [v0 Documentation](https://v0.app/docs) - learn about v0 and how to use it.
 
+## Deployment
+
+- 인터넷 공개 배포 가이드: `docs/DEPLOYMENT_PUBLIC_KR.md`
+
 <a href="https://v0.app/chat/api/kiro/clone/younghun0101/About-Plan" alt="Open in Kiro"><img src="https://pdgvvgmkdvyeydso.public.blob.vercel-storage.com/open%20in%20kiro.svg?sanitize=true" /></a>

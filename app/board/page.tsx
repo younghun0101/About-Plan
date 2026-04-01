@@ -34,11 +34,11 @@ import {
 } from '@/components/ui/alert-dialog'
 import { ClipboardList, Plus, Pencil, Trash2, MessageSquarePlus, X } from 'lucide-react'
 import type { BoardPost, BoardItem, BoardPostFormData } from '@/lib/types'
-import { loadData } from '@/lib/store'
 
 export default function BoardPage() {
-  const { user } = useAuth()
-  const { boardPosts, boardItems, createBoardPost, updateBoardPost, deleteBoardPost, createBoardItem, updateBoardItem, deleteBoardItem, getBoardItems } = useData()
+  const { user, getOtherUser } = useAuth()
+  const { boardPosts, createBoardPost, updateBoardPost, deleteBoardPost, createBoardItem, updateBoardItem, deleteBoardItem, getBoardItems } = useData()
+  const otherUser = getOtherUser()
   
   const [selectedPost, setSelectedPost] = useState<BoardPost | null>(null)
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -54,9 +54,9 @@ export default function BoardPage() {
   const [editingItemContent, setEditingItemContent] = useState('')
 
   const getUserName = (userId: string) => {
-    const data = loadData()
-    const foundUser = data.users.find(u => u.tbl_user_id === userId)
-    return foundUser?.str_name || '알 수 없음'
+    if (user?.id === userId) return user.name
+    if (otherUser?.tbl_user_id === userId) return otherUser.str_name
+    return userId
   }
 
   const handleOpenForm = (post?: BoardPost) => {
@@ -76,7 +76,7 @@ export default function BoardPage() {
     setIsFormOpen(true)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     if (!formData.str_title.trim()) {
@@ -84,23 +84,30 @@ export default function BoardPage() {
       return
     }
 
-    if (selectedPost) {
-      updateBoardPost(selectedPost.tbl_board_post_id, formData)
-      toast.success('게시글이 수정되었습니다.')
-    } else {
-      createBoardPost(formData)
-      toast.success('게시글이 생성되었습니다.')
+    try {
+      if (selectedPost) {
+        await updateBoardPost(selectedPost.tbl_board_post_id, formData)
+        toast.success('게시글이 수정되었습니다.')
+      } else {
+        await createBoardPost(formData)
+        toast.success('게시글이 생성되었습니다.')
+      }
+      setIsFormOpen(false)
+    } catch {
+      toast.error('게시글 저장 중 오류가 발생했습니다.')
     }
-    
-    setIsFormOpen(false)
   }
 
-  const handleDeletePost = () => {
+  const handleDeletePost = async () => {
     if (postToDelete) {
-      deleteBoardPost(postToDelete.tbl_board_post_id)
-      toast.success('게시글이 삭제되었습니다.')
-      setPostToDelete(null)
-      setIsDetailOpen(false)
+      try {
+        await deleteBoardPost(postToDelete.tbl_board_post_id)
+        toast.success('게시글이 삭제되었습니다.')
+        setPostToDelete(null)
+        setIsDetailOpen(false)
+      } catch {
+        toast.error('게시글 삭제 중 오류가 발생했습니다.')
+      }
     }
   }
 
@@ -111,15 +118,19 @@ export default function BoardPage() {
     setEditingItemId(null)
   }
 
-  const handleAddItem = () => {
+  const handleAddItem = async () => {
     if (!newItemContent.trim() || !selectedPost) {
       toast.error('항목 내용을 입력해주세요.')
       return
     }
 
-    createBoardItem(selectedPost.tbl_board_post_id, newItemContent.trim())
-    toast.success('항목이 추가되었습니다.')
-    setNewItemContent('')
+    try {
+      await createBoardItem(selectedPost.tbl_board_post_id, newItemContent.trim())
+      toast.success('항목이 추가되었습니다.')
+      setNewItemContent('')
+    } catch {
+      toast.error('항목 추가 중 오류가 발생했습니다.')
+    }
   }
 
   const handleStartEditItem = (item: BoardItem) => {
@@ -127,19 +138,27 @@ export default function BoardPage() {
     setEditingItemContent(item.str_content)
   }
 
-  const handleSaveEditItem = () => {
+  const handleSaveEditItem = async () => {
     if (!editingItemContent.trim() || !editingItemId) return
 
-    updateBoardItem(editingItemId, editingItemContent.trim())
-    toast.success('항목이 수정되었습니다.')
-    setEditingItemId(null)
+    try {
+      await updateBoardItem(editingItemId, editingItemContent.trim())
+      toast.success('항목이 수정되었습니다.')
+      setEditingItemId(null)
+    } catch {
+      toast.error('항목 수정 중 오류가 발생했습니다.')
+    }
   }
 
-  const handleDeleteItem = () => {
+  const handleDeleteItem = async () => {
     if (itemToDelete) {
-      deleteBoardItem(itemToDelete.tbl_board_item_id)
-      toast.success('항목이 삭제되었습니다.')
-      setItemToDelete(null)
+      try {
+        await deleteBoardItem(itemToDelete.tbl_board_item_id)
+        toast.success('항목이 삭제되었습니다.')
+        setItemToDelete(null)
+      } catch {
+        toast.error('항목 삭제 중 오류가 발생했습니다.')
+      }
     }
   }
 

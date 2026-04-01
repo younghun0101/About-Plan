@@ -173,7 +173,7 @@ export default function AnalyticsPage() {
     setIsFormOpen(true)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     if (!formData.str_name.trim()) {
@@ -181,22 +181,29 @@ export default function AnalyticsPage() {
       return
     }
 
-    if (selectedCategory) {
-      updateCategory(selectedCategory.tbl_category_id, formData)
-      toast.success('카테고리가 수정되었습니다.')
-    } else {
-      createCategory(formData)
-      toast.success('카테고리가 생성되었습니다.')
+    try {
+      if (selectedCategory) {
+        await updateCategory(selectedCategory.tbl_category_id, formData)
+        toast.success('카테고리가 수정되었습니다.')
+      } else {
+        await createCategory(formData)
+        toast.success('카테고리가 생성되었습니다.')
+      }
+      setIsFormOpen(false)
+    } catch {
+      toast.error('카테고리 저장 중 오류가 발생했습니다.')
     }
-    
-    setIsFormOpen(false)
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (categoryToDelete) {
-      deleteCategory(categoryToDelete.tbl_category_id)
-      toast.success('카테고리가 삭제되었습니다.')
-      setCategoryToDelete(null)
+      try {
+        await deleteCategory(categoryToDelete.tbl_category_id)
+        toast.success('카테고리가 삭제되었습니다.')
+        setCategoryToDelete(null)
+      } catch {
+        toast.error('카테고리 삭제 중 오류가 발생했습니다.')
+      }
     }
   }
 
